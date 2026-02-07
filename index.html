@@ -4,35 +4,48 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dot. - Team Feedback</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & Libraries -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Lucide Icons (SVG 기반) -->
+    <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap');
-        body { font-family: 'Inter', sans-serif; }
+        body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
+        
+        /* 텍스트 영역 부드러운 높이 조절 및 스크롤 숨김 */
+        textarea { transition: height 0.1s ease-in-out; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* 애니메이션 효과 */
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        .animate-modal { animation: fadeIn 0.2s ease-out; }
     </style>
 </head>
 <body class="bg-slate-50">
     <div id="root"></div>
 
     <script type="text/babel" data-type="module">
-        const { useState, useEffect, useMemo, useRef } = React;
+        const { useState, useEffect, useRef, useMemo } = React;
         
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
-        // [중요] 이 부분을 본인의 Firebase 콘솔에서 복사한 설정값으로 교체하세요!
-const firebaseConfig = {
-  apiKey: "AIzaSyB4Xhse62VG-wEsXSdsho0FDTea5nmDruI",
-  authDomain: "dot-connect-da773.firebaseapp.com",
-  projectId: "dot-connect-da773",
-  storageBucket: "dot-connect-da773.firebasestorage.app",
-  messagingSenderId: "24121008570",
-  appId: "1:24121008570:web:bb7305bb0b5e38a548fd83",
-  measurementId: "G-20Y2Z9R6LE"
-};
+        // Firebase 설정 (사용자님의 설정값 유지)
+        const firebaseConfig = {
+            apiKey: "AIzaSyB4Xhse62VG-wEsXSdsho0FDTea5nmDruI",
+            authDomain: "dot-connect-da773.firebaseapp.com",
+            projectId: "dot-connect-da773",
+            storageBucket: "dot-connect-da773.firebasestorage.app",
+            messagingSenderId: "24121008570",
+            appId: "1:24121008570:web:bb7305bb0b5e38a548fd83",
+            measurementId: "G-20Y2Z9R6LE"
+        };
         
         const appId = 'dot-feedback-app';
         const app = initializeApp(firebaseConfig);
@@ -46,39 +59,42 @@ const firebaseConfig = {
             const [members, setMembers] = useState([]);
             const [selectedMember, setSelectedMember] = useState(null);
             const [snippets, setSnippets] = useState([]);
+            
+            // 모달 및 편집 상태
             const [isAddingMember, setIsAddingMember] = useState(false);
+            const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+            const [editingId, setEditingId] = useState(null);
+            
+            // 입력 필드 상태
             const [newMemberName, setNewMemberName] = useState('');
             const [newMemberRole, setNewMemberRole] = useState('');
             const [feedbackInput, setFeedbackInput] = useState('');
-            // 수정 기능을 위한 상태들
-            const [editingId, setEditingId] = useState(null);
             const [editInput, setEditInput] = useState('');
-            const textareaRef = useRef(null); // 메인 입력창용
-            const editAreaRef = useRef(null); // 수정 입력창용
 
-            
+            // 높이 조절용 Refs
+            const textareaRef = useRef(null);
+            const editAreaRef = useRef(null);
+
+            // 인증 상태 감시
             useEffect(() => {
                 const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
                     setUser(currentUser);
                     setAuthLoading(false);
+                    setTimeout(() => lucide.createIcons(), 200);
                 });
                 return () => unsubscribe();
             }, []);
 
+            // 멤버 목록 로드
             useEffect(() => {
                 if (!user) return;
-                try {
-                    const membersRef = collection(db, 'artifacts', appId, 'users', user.uid, 'members');
-                    return onSnapshot(membersRef, (snapshot) => {
-                        setMembers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-                    }, (error) => {
-                        console.error("멤버 목록 불러오기 실패:", error);
-                    });
-                } catch (e) {
-                    console.error("Firestore 연결 에러:", e);
-                }
+                const membersRef = collection(db, 'artifacts', appId, 'users', user.uid, 'members');
+                return onSnapshot(membersRef, (snapshot) => {
+                    setMembers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                });
             }, [user]);
 
+            // 피드백 목록 로드
             useEffect(() => {
                 if (!user || !selectedMember) {
                     setSnippets([]);
@@ -91,64 +107,10 @@ const firebaseConfig = {
                         .filter(s => s.memberId === selectedMember.id)
                         .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
                     setSnippets(filtered);
-                }, (error) => {
-                    console.error("피드백 목록 불러오기 실패:", error);
                 });
             }, [user, selectedMember]);
 
-            const handleLogin = () => signInWithPopup(auth, googleProvider).catch(e => console.error("로그인 에러:", e));
-            const handleLogout = () => signOut(auth);
-
-            const addMember = async (e) => {
-                e.preventDefault();
-                if (!newMemberName.trim()) return;
-                try {
-                    await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'members'), {
-                        name: newMemberName,
-                        role: newMemberRole,
-                        createdAt: Date.now()
-                    });
-                    setNewMemberName(''); setNewMemberRole(''); setIsAddingMember(false);
-                } catch (error) {
-                    console.error("멤버 추가 중 에러 발생:", error);
-                    alert("멤버 추가에 실패했습니다. Firebase 콘솔의 Firestore 규칙을 확인해주세요.");
-                }
-            };
-
-            const submitFeedback = async (e) => {
-                e.preventDefault();
-                if (!feedbackInput.trim()) return;
-                try {
-                    await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'snippets'), {
-                        memberId: selectedMember.id,
-                        content: feedbackInput,
-                        type: 'note',
-                        createdAt: Date.now()
-                    });
-                    setFeedbackInput('');
-                } catch (error) {
-                    console.error("피드백 저장 에러:", error);
-                }
-            };
-            // 수정사항을 저장하는 함수
-            const updateSnippetContent = async (id) => {
-                if (!editInput.trim() || !user) return;
-                try {
-                    const snippetRef = doc(db, 'artifacts', appId, 'users', user.uid, 'snippets', id);
-                    await updateDoc(snippetRef, { content: editInput });
-                    setEditingId(null);
-                    setEditInput('');
-                } catch (error) { console.error("Update Error:", error); }
-            };
-
-            // 기록을 삭제하는 함수
-            const deleteSnippet = async (id) => {
-                if (!confirm("이 기록을 정말 삭제할까요?")) return;
-                try {
-                    await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'snippets', id));
-                } catch (error) { console.error("Delete Error:", error); }
-            };
-            // 입력창 높이 자동 조절 함수
+            // 자동 높이 조절 함수
             const autoResize = (ref) => {
                 if (ref.current) {
                     ref.current.style.height = 'auto';
@@ -156,35 +118,80 @@ const firebaseConfig = {
                 }
             };
 
-            // 글을 쓸 때마다 높이 조절 실행
-            useEffect(() => { autoResize(textareaRef); }, [feedbackInput]);
-            useEffect(() => { autoResize(editAreaRef); }, [editInput, editingId]);
+            useEffect(() => autoResize(textareaRef), [feedbackInput]);
+            useEffect(() => autoResize(editAreaRef), [editInput, editingId]);
 
-            
-            if (authLoading) return <div className="h-screen flex items-center justify-center font-bold">Dot Loading...</div>;
+            // 기능 로직들
+            const handleLogin = () => signInWithPopup(auth, googleProvider);
+            const handleLogout = () => signOut(auth).then(() => setIsSettingsOpen(false));
+
+            const addMember = async (e) => {
+                e.preventDefault();
+                if (!newMemberName.trim()) return;
+                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'members'), {
+                    name: newMemberName, role: newMemberRole, createdAt: Date.now()
+                });
+                setNewMemberName(''); setNewMemberRole(''); setIsAddingMember(false);
+            };
+
+            const submitFeedback = async () => {
+                if (!feedbackInput.trim()) return;
+                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'snippets'), {
+                    memberId: selectedMember.id, content: feedbackInput, createdAt: Date.now()
+                });
+                setFeedbackInput('');
+            };
+
+            const updateSnippetContent = async (id) => {
+                if (!editInput.trim()) return;
+                await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'snippets', id), { content: editInput });
+                setEditingId(null); setEditInput('');
+            };
+
+            const deleteSnippet = async (id) => {
+                if (!confirm("이 기록을 삭제하시겠습니까?")) return;
+                await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'snippets', id));
+            };
+
+            // 데이터 백업 (JSON 내보내기)
+            const exportData = () => {
+                const data = { members, snippets, exportedAt: new Date().toISOString() };
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `dot-backup-${new Date().toISOString().split('T')[0]}.json`;
+                a.click();
+            };
+
+            if (authLoading) return (
+                <div className="h-screen flex items-center justify-center bg-white text-slate-300 font-black tracking-widest text-xs uppercase animate-pulse">
+                    Connecting to Dots...
+                </div>
+            );
 
             if (!user) return (
                 <div className="h-screen flex items-center justify-center bg-slate-50 p-6">
-                    <div className="bg-white p-12 rounded-[3rem] shadow-2xl max-w-sm w-full text-center border border-slate-100">
-                        <div className="w-20 h-20 bg-slate-900 text-white rounded-[2rem] flex items-center justify-center mx-auto mb-8 shadow-lg">
-                            <div className="w-10 h-10 border-4 border-white rounded-full"></div>
+                    <div className="bg-white p-12 rounded-[3.5rem] shadow-2xl max-w-sm w-full text-center border border-slate-100">
+                        <div className="w-20 h-20 bg-slate-900 text-white rounded-[2.2rem] flex items-center justify-center mx-auto mb-8 shadow-xl">
+                            <div className="w-10 h-10 bg-white rounded-full"></div>
                         </div>
-                        <h1 className="text-3xl font-black mb-2 tracking-tight italic text-slate-900">Dot.</h1>
-                        <p className="text-slate-500 mb-12 text-sm font-medium">성장을 위한 기록의 시작.</p>
+                        <h1 className="text-3xl font-black mb-2 italic tracking-tighter">Dot.</h1>
+                        <p className="text-slate-400 mb-12 text-sm font-medium">성장을 위한 기록의 시작.</p>
                         <button onClick={handleLogin} className="w-full bg-slate-900 text-white p-5 rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-xl active:scale-95">구글 계정으로 로그인</button>
                     </div>
                 </div>
             );
 
             return (
-                <div className="flex h-screen bg-slate-50 text-slate-900 overflow-hidden">
-                    <div className="w-72 border-r border-slate-200 flex flex-col bg-white">
-                        <div className="p-8 border-b border-slate-50 flex justify-between items-center">
+                <div className="flex h-screen bg-white text-slate-900 overflow-hidden relative">
+                    {/* Sidebar */}
+                    <div className="w-72 border-r border-slate-100 flex flex-col bg-white">
+                        <div className="p-8">
                             <h1 className="font-black text-2xl tracking-tighter italic">Dot.</h1>
-                            <button onClick={handleLogout} className="text-slate-300 hover:text-red-500 text-xs font-black tracking-widest uppercase">Logout</button>
                         </div>
-                        <div className="flex-1 overflow-y-auto p-4 space-y-2">
-                            <button onClick={() => setIsAddingMember(true)} className="w-full p-4 text-xs font-black text-slate-400 border-2 border-dashed border-slate-100 rounded-2xl hover:border-slate-300 hover:text-slate-500 transition-all">+ NEW MEMBER</button>
+                        <div className="flex-1 overflow-y-auto p-4 space-y-2 no-scrollbar">
+                            <button onClick={() => setIsAddingMember(true)} className="w-full p-4 text-xs font-black text-slate-400 border-2 border-dashed border-slate-100 rounded-2xl hover:border-slate-300 transition-all">+ NEW MEMBER</button>
                             {members.map(m => (
                                 <button key={m.id} onClick={() => setSelectedMember(m)} className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all ${selectedMember?.id === m.id ? 'bg-slate-900 text-white shadow-xl' : 'hover:bg-slate-50 text-slate-600'}`}>
                                     <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-[10px] ${selectedMember?.id === m.id ? 'bg-slate-700' : 'bg-slate-100 text-slate-400'}`}>{m.name[0]}</div>
@@ -192,80 +199,85 @@ const firebaseConfig = {
                                 </button>
                             ))}
                         </div>
+                        
+                        {/* Sidebar Bottom: Settings entry */}
+                        <div className="p-6 border-t border-slate-50">
+                            <button 
+                                onClick={() => setIsSettingsOpen(true)}
+                                className="w-full flex items-center justify-between p-3 hover:bg-slate-50 rounded-2xl transition-all group"
+                            >
+                                <div className="flex items-center gap-3 overflow-hidden">
+                                    <img src={user.photoURL} className="w-8 h-8 rounded-full border border-slate-100" />
+                                    <span className="text-xs font-bold text-slate-700 truncate">{user.displayName}</span>
+                                </div>
+                                <span className="text-[10px] font-black text-slate-300 group-hover:text-slate-900 transition-colors italic tracking-widest">SET</span>
+                            </button>
+                        </div>
                     </div>
 
+                    {/* Main View */}
                     <div className="flex-1 flex flex-col bg-white">
                         {selectedMember ? (
                             <>
                                 <header className="h-24 px-10 flex items-center border-b border-slate-50">
                                     <div>
-                                        <h2 className="text-2xl font-black tracking-tight">{selectedMember.name}</h2>
+                                        <h2 className="text-2xl font-black tracking-tight tracking-tighter">{selectedMember.name}</h2>
                                         <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{selectedMember.role || 'Member'}</p>
                                     </div>
                                 </header>
-                                <div className="flex-1 overflow-y-auto px-10 py-10 max-w-4xl w-full mx-auto">
-                                    <form onSubmit={submitFeedback} className="mb-12">
-                                        <div className="mb-12">
+                                <div className="flex-1 overflow-y-auto px-10 py-10 max-w-4xl w-full mx-auto no-scrollbar">
+                                    <div className="mb-12">
                                         <textarea 
                                             ref={textareaRef}
                                             value={feedbackInput} 
                                             onChange={e => setFeedbackInput(e.target.value)}
                                             onKeyDown={e => {
-                                                // 엔터만 누르면 저장, Shift+엔터는 줄바꿈
                                                 if (e.key === 'Enter' && !e.shiftKey) {
                                                     e.preventDefault();
                                                     submitFeedback();
                                                 }
                                             }}
-                                            placeholder={`${selectedMember.name}님에 대해 생각난 점을 적으세요... (Shift+Enter로 줄바꿈)`}
-                                            className="w-full text-lg py-6 px-8 bg-slate-50 border-none rounded-[2rem] focus:ring-2 focus:ring-slate-900 outline-none shadow-inner font-medium resize-none overflow-hidden min-h-[80px]"
+                                            placeholder={`${selectedMember.name}님에게 남길 점(Dot)을 적으세요... (Shift+Enter로 줄바꿈)`}
+                                            className="w-full text-lg py-6 px-8 bg-slate-50 border-none rounded-[2.5rem] focus:ring-2 focus:ring-slate-900 outline-none shadow-inner font-medium resize-none overflow-hidden min-h-[80px]"
                                             autoFocus 
                                         />
                                     </div>
-                                    </form>
                                     <div className="space-y-4">
                                         <div className="flex items-center gap-2 text-slate-300 mb-6">
                                             <span className="text-[10px] font-black uppercase tracking-[0.3em]">Timeline</span>
                                         </div>
                                         {snippets.map(s => (
-                                            <div key={s.id} className="p-6 rounded-[2rem] border border-slate-50 bg-slate-50/20 hover:bg-slate-50 transition-all group relative">
+                                            <div key={s.id} className="p-8 rounded-[3rem] border border-slate-50 bg-slate-50/20 hover:bg-slate-50 transition-all group relative">
                                                 {editingId === s.id ? (
-                                                    <div className="w-full space-y-3">
+                                                    <div className="w-full space-y-4">
                                                         <textarea 
                                                             ref={editAreaRef}
                                                             value={editInput}
                                                             onChange={e => setEditInput(e.target.value)}
                                                             onKeyDown={e => {
-                                                                // 수정 중 엔터만 누르면 바로 저장
                                                                 if (e.key === 'Enter' && !e.shiftKey) {
                                                                     e.preventDefault();
                                                                     updateSnippetContent(s.id);
                                                                 }
                                                             }}
-                                                            className="w-full p-4 bg-white border-2 border-slate-900 rounded-2xl outline-none font-semibold shadow-lg resize-none overflow-hidden min-h-[60px]"
+                                                            className="w-full p-6 bg-white border-2 border-slate-900 rounded-[2rem] outline-none font-semibold shadow-xl resize-none overflow-hidden"
                                                             autoFocus
                                                         />
                                                         <div className="flex gap-2 justify-end">
-                                                            <button onClick={() => setEditingId(null)} className="px-3 py-1 text-xs font-bold text-slate-400">Cancel</button>
-                                                            <button onClick={() => updateSnippetContent(s.id)} className="px-4 py-1.5 bg-slate-900 text-white rounded-xl text-xs font-bold shadow-md">Save</button>
+                                                            <button onClick={() => setEditingId(null)} className="px-4 py-2 text-xs font-bold text-slate-400">취소</button>
+                                                            <button onClick={() => updateSnippetContent(s.id)} className="px-6 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold shadow-lg">저장</button>
                                                         </div>
                                                     </div>
                                                 ) : (
                                                     <>
-                                                        <p className="text-slate-800 text-lg font-semibold leading-relaxed pr-10">{s.content}</p>
-                                                        <div className="flex justify-between items-center mt-4">
+                                                        <p className="text-slate-800 text-lg font-semibold leading-relaxed pr-10 whitespace-pre-wrap">{s.content}</p>
+                                                        <div className="flex justify-between items-center mt-6">
                                                             <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
                                                                 {new Date(s.createdAt).toLocaleDateString()}
                                                             </span>
-                                                            <div className="flex gap-3 opacity-0 group-hover:opacity-100 transition-all">
-                                                                <button 
-                                                                    onClick={() => { setEditingId(s.id); setEditInput(s.content); }}
-                                                                    className="text-[10px] font-black text-slate-400 hover:text-slate-900 uppercase tracking-widest"
-                                                                >Edit</button>
-                                                                <button 
-                                                                    onClick={() => deleteSnippet(s.id)}
-                                                                    className="text-[10px] font-black text-red-200 hover:text-red-500 uppercase tracking-widest"
-                                                                >Delete</button>
+                                                            <div className="flex gap-4 opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0">
+                                                                <button onClick={() => { setEditingId(s.id); setEditInput(s.content); }} className="text-[10px] font-black text-slate-400 hover:text-slate-900 uppercase tracking-widest">Edit</button>
+                                                                <button onClick={() => deleteSnippet(s.id)} className="text-[10px] font-black text-red-200 hover:text-red-500 uppercase tracking-widest">Delete</button>
                                                             </div>
                                                         </div>
                                                     </>
@@ -273,33 +285,94 @@ const firebaseConfig = {
                                             </div>
                                         ))}
                                         {snippets.length === 0 && (
-                                            <div className="py-20 text-center text-slate-200 font-bold uppercase tracking-widest text-xs">No dots yet</div>
+                                            <div className="py-20 text-center text-slate-200 font-bold uppercase tracking-widest text-xs tracking-[0.5em]">No dots yet</div>
                                         )}
                                     </div>
                                 </div>
                             </>
                         ) : (
-                            <div className="flex-1 flex flex-col items-center justify-center">
-                                <div className="w-16 h-16 bg-slate-50 rounded-3xl flex items-center justify-center mb-4">
+                            <div className="flex-1 flex flex-col items-center justify-center text-slate-200">
+                                <div className="w-16 h-16 bg-slate-50 rounded-3xl flex items-center justify-center mb-6 text-slate-100 shadow-inner">
                                     <div className="w-4 h-4 bg-slate-200 rounded-full animate-pulse"></div>
                                 </div>
-                                <span className="text-xs font-black text-slate-300 uppercase tracking-[0.4em]">Select a member</span>
+                                <span className="text-[10px] font-black uppercase tracking-[0.5em]">Select Member</span>
                             </div>
                         )}
                     </div>
 
+                    {/* Modal: New Member */}
                     {isAddingMember && (
-                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-6 z-50">
-                            <div className="bg-white rounded-[3rem] w-full max-w-sm p-10 shadow-2xl border border-white/20">
-                                <h3 className="text-2xl font-black mb-10 tracking-tight">New Member</h3>
+                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-6 z-[80]">
+                            <div className="bg-white rounded-[3rem] w-full max-w-sm p-10 shadow-2xl border border-white/20 animate-modal">
+                                <h3 className="text-2xl font-black mb-10 tracking-tight italic">New Team.</h3>
                                 <form onSubmit={addMember} className="space-y-4">
-                                    <input required value={newMemberName} onChange={e => setNewMemberName(e.target.value)} placeholder="이름" className="w-full p-5 bg-slate-50 rounded-2xl outline-none font-bold placeholder:text-slate-300 focus:ring-2 focus:ring-slate-900 transition-all" />
-                                    <input value={newMemberRole} onChange={e => setNewMemberRole(e.target.value)} placeholder="역할 (예: PM, Designer)" className="w-full p-5 bg-slate-50 rounded-2xl outline-none font-bold placeholder:text-slate-300 focus:ring-2 focus:ring-slate-900 transition-all" />
+                                    <input required value={newMemberName} onChange={e => setNewMemberName(e.target.value)} placeholder="이름" className="w-full p-5 bg-slate-50 rounded-2xl outline-none font-bold placeholder:text-slate-200 focus:ring-2 focus:ring-slate-900 transition-all" />
+                                    <input value={newMemberRole} onChange={e => setNewMemberRole(e.target.value)} placeholder="역할 (예: PM, Designer)" className="w-full p-5 bg-slate-50 rounded-2xl outline-none font-bold placeholder:text-slate-200 focus:ring-2 focus:ring-slate-900 transition-all" />
                                     <div className="flex gap-4 pt-8">
                                         <button type="button" onClick={() => setIsAddingMember(false)} className="flex-1 p-5 font-bold text-slate-400 hover:bg-slate-50 rounded-2xl transition-all">취소</button>
                                         <button type="submit" className="flex-1 p-5 bg-slate-900 text-white font-bold rounded-2xl shadow-xl hover:bg-slate-800 active:scale-95 transition-all">추가하기</button>
                                     </div>
                                 </form>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Modal: Settings (설정 창) */}
+                    {isSettingsOpen && (
+                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-6 z-[100]">
+                            <div className="bg-white rounded-[3rem] w-full max-w-md shadow-2xl overflow-hidden border border-white/20 animate-modal">
+                                <div className="p-10 space-y-10">
+                                    <div className="flex justify-between items-center">
+                                        <h3 className="text-2xl font-black italic tracking-tighter">Settings.</h3>
+                                        <button onClick={() => setIsSettingsOpen(false)} className="text-xs font-black text-slate-300 hover:text-slate-900 transition-colors uppercase tracking-widest">Close</button>
+                                    </div>
+                                    
+                                    <div className="space-y-8">
+                                        {/* Account */}
+                                        <div>
+                                            <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-4">Account</p>
+                                            <div className="flex items-center justify-between p-5 bg-slate-50 rounded-3xl border border-slate-100">
+                                                <div className="flex items-center gap-3 overflow-hidden">
+                                                    <img src={user.photoURL} className="w-10 h-10 rounded-full shadow-md" />
+                                                    <div className="overflow-hidden text-left">
+                                                        <p className="text-sm font-bold text-slate-900 truncate">{user.displayName}</p>
+                                                        <p className="text-[10px] text-slate-400 font-medium truncate">{user.email}</p>
+                                                    </div>
+                                                </div>
+                                                <button onClick={handleLogout} className="text-[10px] font-black text-red-500 hover:bg-red-50 px-3 py-2 rounded-xl transition-all uppercase tracking-tighter">Logout</button>
+                                            </div>
+                                        </div>
+
+                                        {/* Data Control */}
+                                        <div>
+                                            <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-4">Data Management</p>
+                                            <button 
+                                                onClick={exportData}
+                                                className="w-full flex justify-between items-center p-6 bg-slate-900 text-white rounded-3xl hover:bg-slate-800 transition-all shadow-xl active:scale-95"
+                                            >
+                                                <div className="text-left">
+                                                    <p className="text-sm font-bold">내 기록 백업하기</p>
+                                                    <p className="text-[10px] opacity-50 font-medium uppercase tracking-tight">Export all dots as JSON</p>
+                                                </div>
+                                                <span className="text-xs font-black">EXPORT ↓</span>
+                                            </button>
+                                        </div>
+
+                                        {/* Support */}
+                                        <div>
+                                            <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-4">Support & Feedback</p>
+                                            <a 
+                                                href="mailto:chongtaeklee@gmail.com" 
+                                                className="block w-full p-5 border-2 border-dashed border-slate-100 rounded-3xl text-center hover:border-slate-300 transition-all group"
+                                            >
+                                                <span className="text-sm font-bold text-slate-400 group-hover:text-slate-600 transition-colors">개선 의견 보내기 ✉️</span>
+                                            </a>
+                                            <p className="text-[9px] text-slate-300 text-center mt-4 leading-relaxed font-medium uppercase tracking-wider">
+                                                Connecting the dots for team growth.<br/>v1.0.0 Build 2024
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     )}
