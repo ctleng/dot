@@ -50,7 +50,11 @@ const firebaseConfig = {
             const [newMemberName, setNewMemberName] = useState('');
             const [newMemberRole, setNewMemberRole] = useState('');
             const [feedbackInput, setFeedbackInput] = useState('');
+            // 수정 기능을 위한 상태들
+            const [editingId, setEditingId] = useState(null);
+            const [editInput, setEditInput] = useState('');
 
+            
             useEffect(() => {
                 const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
                     setUser(currentUser);
@@ -124,7 +128,26 @@ const firebaseConfig = {
                     console.error("피드백 저장 에러:", error);
                 }
             };
+            // 수정사항을 저장하는 함수
+            const updateSnippetContent = async (id) => {
+                if (!editInput.trim() || !user) return;
+                try {
+                    const snippetRef = doc(db, 'artifacts', appId, 'users', user.uid, 'snippets', id);
+                    await updateDoc(snippetRef, { content: editInput });
+                    setEditingId(null);
+                    setEditInput('');
+                } catch (error) { console.error("Update Error:", error); }
+            };
 
+            // 기록을 삭제하는 함수
+            const deleteSnippet = async (id) => {
+                if (!confirm("이 기록을 정말 삭제할까요?")) return;
+                try {
+                    await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'snippets', id));
+                } catch (error) { console.error("Delete Error:", error); }
+            };
+
+            
             if (authLoading) return <div className="h-screen flex items-center justify-center font-bold">Dot Loading...</div>;
 
             if (!user) return (
@@ -183,11 +206,41 @@ const firebaseConfig = {
                                         </div>
                                         {snippets.map(s => (
                                             <div key={s.id} className="p-6 rounded-[2rem] border border-slate-50 bg-slate-50/20 hover:bg-slate-50 transition-all group relative">
-                                                <p className="text-slate-800 text-lg font-semibold leading-relaxed">{s.content}</p>
-                                                <div className="flex justify-between items-center mt-4">
-                                                    <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
-                                                        {new Date(s.createdAt).toLocaleDateString()}
-                                                    </span>
+                                                {editingId === s.id ? (
+                                                    <div className="w-full space-y-3">
+                                                        <input 
+                                                            value={editInput}
+                                                            onChange={e => setEditInput(e.target.value)}
+                                                            className="w-full p-4 bg-white border-2 border-slate-900 rounded-2xl outline-none font-semibold shadow-lg"
+                                                            autoFocus
+                                                        />
+                                                        <div className="flex gap-2 justify-end">
+                                                            <button onClick={() => setEditingId(null)} className="px-3 py-1 text-xs font-bold text-slate-400">Cancel</button>
+                                                            <button onClick={() => updateSnippetContent(s.id)} className="px-4 py-1.5 bg-slate-900 text-white rounded-xl text-xs font-bold shadow-md">Save</button>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        <p className="text-slate-800 text-lg font-semibold leading-relaxed pr-10">{s.content}</p>
+                                                        <div className="flex justify-between items-center mt-4">
+                                                            <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
+                                                                {new Date(s.createdAt).toLocaleDateString()}
+                                                            </span>
+                                                            <div className="flex gap-3 opacity-0 group-hover:opacity-100 transition-all">
+                                                                <button 
+                                                                    onClick={() => { setEditingId(s.id); setEditInput(s.content); }}
+                                                                    className="text-[10px] font-black text-slate-400 hover:text-slate-900 uppercase tracking-widest"
+                                                                >Edit</button>
+                                                                <button 
+                                                                    onClick={() => deleteSnippet(s.id)}
+                                                                    className="text-[10px] font-black text-red-200 hover:text-red-500 uppercase tracking-widest"
+                                                                >Delete</button>
+                                                            </div>
+                                                        </div>
+                                                    </>
+                                                )}
+                                            </div>
+                                        ))}
                                                 </div>
                                             </div>
                                         ))}
