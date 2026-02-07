@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dot. - Team Feedback</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-50">
+    <div id="root"></div>
+
+    <!-- type="text/babel"과 data-type="module"을 함께 사용하여 JSX와 Import 문을 모두 지원합니다. -->
+    <script type="text/babel" data-type="module">
+        const { useState, useEffect, useMemo } = React;
+        
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+
+        // [중요] 이 부분을 본인의 Firebase 콘솔에서 복사한 설정값으로 교체하세요!
+          const firebaseConfig = {
+            apiKey: "AIzaSyB4Xhse62VG-wEsXSdsho0FDTea5nmDruI",
+            authDomain: "dot-connect-da773.firebaseapp.com",
+            projectId: "dot-connect-da773",
+            storageBucket: "dot-connect-da773.firebasestorage.app",
+            messagingSenderId: "24121008570",
+            appId: "1:24121008570:web:bb7305bb0b5e38a548fd83",
+            measurementId: "G-20Y2Z9R6LE"
+        };
+        
+        const appId = 'dot-feedback-app';
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const googleProvider = new GoogleAuthProvider();
+
+        function App() {
+            const [user, setUser] = useState(null);
+            const [authLoading, setAuthLoading] = useState(true);
+            const [members, setMembers] = useState([]);
+            const [selectedMember, setSelectedMember] = useState(null);
+            const [snippets, setSnippets] = useState([]);
+            const [isAddingMember, setIsAddingMember] = useState(false);
+            const [newMemberName, setNewMemberName] = useState('');
+            const [newMemberRole, setNewMemberRole] = useState('');
+            const [feedbackInput, setFeedbackInput] = useState('');
+
+            useEffect(() => {
+                const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+                    setUser(currentUser);
+                    setAuthLoading(false);
+                });
+                return () => unsubscribe();
+            }, []);
+
+            useEffect(() => {
+                if (!user) return;
+                const membersRef = collection(db, 'artifacts', appId, 'users', user.uid, 'members');
+                return onSnapshot(membersRef, (snapshot) => {
+                    setMembers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                });
+            }, [user]);
+
+            useEffect(() => {
+                if (!user || !selectedMember) {
+                    setSnippets([]);
+                    return;
+                }
+                const snippetsRef = collection(db, 'artifacts', appId, 'users', user.uid, 'snippets');
+                return onSnapshot(snippetsRef, (snapshot) => {
+                    const all = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    const filtered = all
+                        .filter(s => s.memberId === selectedMember.id)
+                        .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+                    setSnippets(filtered);
+                });
+            }, [user, selectedMember]);
+
+            const handleLogin = () => signInWithPopup(auth, googleProvider);
+            const handleLogout = () => signOut(auth);
+
+            const addMember = async (e) => {
+                e.preventDefault();
+                if (!newMemberName.trim()) return;
+                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'members'), {
+                    name: newMemberName,
+                    role: newMemberRole,
+                    createdAt: Date.now()
+                });
+                setNewMemberName(''); setNewMemberRole(''); setIsAddingMember(false);
+            };
+
+            const submitFeedback = async (e) => {
+                e.preventDefault();
+                if (!feedbackInput.trim()) return;
+                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'snippets'), {
+                    memberId: selectedMember.id,
+                    content: feedbackInput,
+                    type: 'note',
+                    createdAt: Date.now()
+                });
+                setFeedbackInput('');
+            };
+
+            if (authLoading) return <div className="h-screen flex items-center justify-center font-bold">Dot Loading...</div>;
+
+            if (!user) return (
+                <div className="h-screen flex items-center justify-center bg-slate-50 p-6">
+                    <div className="bg-white p-12 rounded-[3rem] shadow-2xl max-w-sm w-full text-center border border-slate-100">
+                        <div className="w-20 h-20 bg-slate-900 text-white rounded-[2rem] flex items-center justify-center mx-auto mb-8 shadow-lg">
+                            <div className="w-10 h-10 border-4 border-white rounded-full"></div>
+                        </div>
+                        <h1 className="text-3xl font-black mb-2 tracking-tight italic text-slate-900">Dot.</h1>
+                        <p className="text-slate-500 mb-12 text-sm font-medium">성장을 위한 기록의 시작.</p>
+                        <button onClick={handleLogin} className="w-full bg-slate-900 text-white p-5 rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-xl active:scale-95">구글 계정으로 로그인</button>
+                    </div>
+                </div>
+            );
+
+            return (
+                <div className="flex h-screen bg-slate-50 text-slate-900 overflow-hidden">
+                    <div className="w-72 border-r border-slate-200 flex flex-col bg-white">
+                        <div className="p-8 border-b border-slate-50 flex justify-between items-center">
+                            <h1 className="font-black text-2xl tracking-tighter italic">Dot.</h1>
+                            <button onClick={handleLogout} className="text-slate-300 hover:text-red-500 text-xs font-black tracking-widest uppercase">Logout</button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                            <button onClick={() => setIsAddingMember(true)} className="w-full p-4 text-xs font-black text-slate-400 border-2 border-dashed border-slate-100 rounded-2xl hover:border-slate-300 hover:text-slate-500 transition-all">+ NEW MEMBER</button>
+                            {members.map(m => (
+                                <button key={m.id} onClick={() => setSelectedMember(m)} className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all ${selectedMember?.id === m.id ? 'bg-slate-900 text-white shadow-xl' : 'hover:bg-slate-50 text-slate-600'}`}>
+                                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-[10px] ${selectedMember?.id === m.id ? 'bg-slate-700' : 'bg-slate-100 text-slate-400'}`}>{m.name[0]}</div>
+                                    <span className="font-bold text-sm truncate">{m.name}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="flex-1 flex flex-col bg-white">
+                        {selectedMember ? (
+                            <>
+                                <header className="h-24 px-10 flex items-center border-b border-slate-50">
+                                    <div>
+                                        <h2 className="text-2xl font-black tracking-tight">{selectedMember.name}</h2>
+                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{selectedMember.role || 'Member'}</p>
+                                    </div>
+                                </header>
+                                <div className="flex-1 overflow-y-auto px-10 py-10 max-w-4xl w-full mx-auto">
+                                    <form onSubmit={submitFeedback} className="mb-12">
+                                        <input 
+                                            value={feedbackInput} 
+                                            onChange={e => setFeedbackInput(e.target.value)}
+                                            placeholder={`${selectedMember.name}님에 대해 생각난 점을 적고 엔터...`}
+                                            className="w-full text-lg py-6 px-8 bg-slate-50 border-none rounded-[2rem] focus:ring-2 focus:ring-slate-900 outline-none shadow-inner font-medium"
+                                            autoFocus 
+                                        />
+                                    </form>
+                                    <div className="space-y-4">
+                                        <div className="flex items-center gap-2 text-slate-300 mb-6">
+                                            <span className="text-[10px] font-black uppercase tracking-[0.3em]">Timeline</span>
+                                        </div>
+                                        {snippets.map(s => (
+                                            <div key={s.id} className="p-6 rounded-[2rem] border border-slate-50 bg-slate-50/20 hover:bg-slate-50 transition-all group relative">
+                                                <p className="text-slate-800 text-lg font-semibold leading-relaxed">{s.content}</p>
+                                                <div className="flex justify-between items-center mt-4">
+                                                    <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
+                                                        {new Date(s.createdAt).toLocaleDateString()}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                        {snippets.length === 0 && (
+                                            <div className="py-20 text-center text-slate-200 font-bold uppercase tracking-widest text-xs">No dots yet</div>
+                                        )}
+                                    </div>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="flex-1 flex flex-col items-center justify-center">
+                                <div className="w-16 h-16 bg-slate-50 rounded-3xl flex items-center justify-center mb-4">
+                                    <div className="w-4 h-4 bg-slate-200 rounded-full animate-pulse"></div>
+                                </div>
+                                <span className="text-xs font-black text-slate-300 uppercase tracking-[0.4em]">Select a member</span>
+                            </div>
+                        )}
+                    </div>
+
+                    {isAddingMember && (
+                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-6 z-50">
+                            <div className="bg-white rounded-[3rem] w-full max-w-sm p-10 shadow-2xl border border-white/20">
+                                <h3 className="text-2xl font-black mb-10 tracking-tight">New Member</h3>
+                                <form onSubmit={addMember} className="space-y-4">
+                                    <input required value={newMemberName} onChange={e => setNewMemberName(e.target.value)} placeholder="이름" className="w-full p-5 bg-slate-50 rounded-2xl outline-none font-bold placeholder:text-slate-300 focus:ring-2 focus:ring-slate-900 transition-all" />
+                                    <input value={newMemberRole} onChange={e => setNewMemberRole(e.target.value)} placeholder="역할 (예: PM, Designer)" className="w-full p-5 bg-slate-50 rounded-2xl outline-none font-bold placeholder:text-slate-300 focus:ring-2 focus:ring-slate-900 transition-all" />
+                                    <div className="flex gap-4 pt-8">
+                                        <button type="button" onClick={() => setIsAddingMember(false)} className="flex-1 p-5 font-bold text-slate-400 hover:bg-slate-50 rounded-2xl transition-all">취소</button>
+                                        <button type="submit" className="flex-1 p-5 bg-slate-900 text-white font-bold rounded-2xl shadow-xl hover:bg-slate-800 active:scale-95 transition-all">추가하기</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
