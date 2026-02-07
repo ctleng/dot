@@ -4,31 +4,29 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dot. - Team Feedback</title>
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- React & Libraries -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap');
-        body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
-        textarea { transition: height 0.1s ease-in-out; }
+        body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; background-color: #f8fafc; }
+        textarea { transition: height 0.1s ease-in-out; resize: none; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
         .animate-modal { animation: fadeIn 0.2s ease-out; }
     </style>
 </head>
-<body class="bg-slate-50">
+<body>
     <div id="root"></div>
 
     <script type="text/babel" data-type="module">
-        const { useState, useEffect, useRef, useMemo } = React;
+        const { useState, useEffect, useRef } = React;
         
+        // Firebase modules from CDN
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyB4Xhse62VG-wEsXSdsho0FDTea5nmDruI",
@@ -46,11 +44,12 @@
         const db = getFirestore(app);
         const googleProvider = new GoogleAuthProvider();
 
+        // UI에 사용될 아이콘 (SVG 내장형 - 로딩 에러 원천 차단)
         const Icon = {
-            Dot: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/></svg>,
-            Plus: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
-            Download: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
-            Trash: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            Dot: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><circle cx="12" cy="12" r="1"/></svg>,
+            Plus: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+            Download: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
+            Trash: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
         };
 
         function App() {
@@ -70,11 +69,10 @@
             const editAreaRef = useRef(null);
 
             useEffect(() => {
-                const unsubscribe = onAuthStateChanged(auth, (u) => {
+                return onAuthStateChanged(auth, (u) => {
                     setUser(u);
                     setAuthLoading(false);
                 });
-                return () => unsubscribe();
             }, []);
 
             useEffect(() => {
@@ -89,13 +87,12 @@
                 if (!user || !selectedMember) { setSnippets([]); return; }
                 const ref = collection(db, 'artifacts', appId, 'users', user.uid, 'snippets');
                 return onSnapshot(ref, (snap) => {
-                    const allData = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                    const filtered = allData
+                    const filtered = snap.docs.map(d => ({ id: d.id, ...d.data() }))
                         .filter(s => s.memberId === selectedMember.id)
                         .sort((a, b) => {
-                            const timeA = a.createdAt?.seconds || a.createdAt || 0;
-                            const timeB = b.createdAt?.seconds || b.createdAt || 0;
-                            return timeB - timeA;
+                            const tA = a.createdAt?.seconds || a.createdAt || 0;
+                            const tB = b.createdAt?.seconds || b.createdAt || 0;
+                            return tB - tA;
                         });
                     setSnippets(filtered);
                 });
@@ -111,22 +108,8 @@
             useEffect(() => autoResize(textareaRef), [feedbackInput]);
             useEffect(() => autoResize(editAreaRef), [editInput, editingId]);
 
-            const handleLogin = () => {
-                signInWithPopup(auth, googleProvider).catch(e => {
-                    if (e.code === 'auth/unauthorized-domain') {
-                        alert("승인되지 않은 도메인입니다. 파이어베이스 콘솔 설정을 확인해주세요.");
-                    }
-                });
-            };
-            
-            const handleLogout = () => {
-                if(confirm("로그아웃 하시겠습니까?")) {
-                    signOut(auth).then(() => {
-                        setIsSettingsOpen(false);
-                        setSelectedMember(null);
-                    });
-                }
-            };
+            const handleLogin = () => signInWithPopup(auth, googleProvider).catch(e => alert("로그인 실패: " + e.message));
+            const handleLogout = () => confirm("로그아웃 하시겠습니까?") && signOut(auth).then(() => setIsSettingsOpen(false));
 
             const addMember = async (e) => {
                 e.preventDefault();
@@ -148,12 +131,7 @@
             const updateSnippetContent = async (id) => {
                 if (!editInput.trim()) return;
                 await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'snippets', id), { content: editInput });
-                setEditingId(null); setEditInput('');
-            };
-
-            const deleteSnippet = async (id) => {
-                if (!confirm("이 기록을 삭제하시겠습니까?")) return;
-                await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'snippets', id));
+                setEditingId(null);
             };
 
             const formatTimestamp = (ts) => {
@@ -167,43 +145,37 @@
                     const ref = collection(db, 'artifacts', appId, 'users', user.uid, 'snippets');
                     const snap = await getDocs(ref);
                     const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                    if (all.length === 0) { alert("기록이 없습니다."); return; }
                     const rows = [["날짜", "팀원명", "역할", "내용"]];
                     all.forEach(s => {
                         const m = members.find(item => item.id === s.memberId);
-                        const content = `"${s.content.replace(/"/g, '""')}"`;
-                        rows.push([formatTimestamp(s.createdAt), m?.name || "삭제됨", m?.role || "-", content]);
+                        rows.push([formatTimestamp(s.createdAt), m?.name || "삭제됨", m?.role || "-", `"${s.content.replace(/"/g, '""')}"`]);
                     });
                     const csv = "\uFEFF" + rows.map(r => r.join(",")).join("\n");
                     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
                     const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a'); a.href = url; a.download = `dot-export.csv`; a.click();
-                    URL.revokeObjectURL(url);
-                } catch (e) { alert("백업 중 에러가 발생했습니다."); }
+                    const a = document.createElement('a'); a.href = url; a.download = `dot-backup.csv`; a.click();
+                } catch (e) { alert("백업 실패"); }
             };
 
-            if (authLoading) return <div className="h-screen flex items-center justify-center bg-white text-slate-300 font-bold uppercase tracking-widest text-xs animate-pulse">Loading...</div>;
+            if (authLoading) return <div className="h-screen flex items-center justify-center text-slate-300 font-bold uppercase tracking-widest text-xs">Loading...</div>;
 
             if (!user) return (
-                <div className="h-screen flex items-center justify-center bg-slate-50 p-6">
-                    <div className="bg-white p-12 rounded-[3.5rem] shadow-2xl max-w-sm w-full text-center border border-slate-100">
-                        <div className="w-20 h-20 bg-slate-900 text-white rounded-[2.2rem] flex items-center justify-center mx-auto mb-8 shadow-xl">
+                <div className="h-screen flex items-center justify-center p-6">
+                    <div className="bg-white p-12 rounded-[3rem] shadow-2xl max-w-sm w-full text-center border border-slate-100">
+                        <div className="w-16 h-16 bg-slate-900 text-white rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl">
                             <Icon.Dot />
                         </div>
                         <h1 className="text-3xl font-black mb-2 italic tracking-tighter text-slate-900">Dot.</h1>
-                        <p className="text-slate-400 mb-12 text-sm font-medium">성장을 위한 기록의 시작.</p>
-                        <button onClick={handleLogin} className="w-full bg-slate-900 text-white p-5 rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-xl active:scale-95">구글 계정으로 로그인</button>
+                        <p className="text-slate-400 mb-10 text-sm font-medium">성장을 위한 기록의 시작.</p>
+                        <button onClick={handleLogin} className="w-full bg-slate-900 text-white p-5 rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-xl">구글 계정으로 로그인</button>
                     </div>
                 </div>
             );
 
             return (
-                <div className="flex h-screen bg-white text-slate-900 overflow-hidden relative">
-                    {/* Sidebar */}
+                <div className="flex h-screen overflow-hidden relative">
                     <div className="w-72 border-r border-slate-100 flex flex-col bg-white">
-                        <div className="p-8">
-                            <h1 className="font-black text-2xl tracking-tighter italic">Dot.</h1>
-                        </div>
+                        <div className="p-8"><h1 className="font-black text-2xl tracking-tighter italic text-slate-900">Dot.</h1></div>
                         <div className="flex-1 overflow-y-auto p-4 space-y-2 no-scrollbar">
                             <button onClick={() => setIsAddingMember(true)} className="w-full flex items-center justify-center gap-2 p-4 text-xs font-black text-slate-400 border-2 border-dashed border-slate-50 rounded-2xl hover:border-slate-200 hover:text-slate-600 transition-all mb-4">
                                 <Icon.Plus /> NEW MEMBER
@@ -216,23 +188,22 @@
                             ))}
                         </div>
                         <div className="p-6 border-t border-slate-50">
-                            <button onClick={() => setIsSettingsOpen(true)} className="w-full flex items-center justify-between p-3 hover:bg-slate-50 rounded-2xl transition-all group text-left">
-                                <div className="flex items-center gap-3 overflow-hidden">
-                                    <img src={user.photoURL} className="w-8 h-8 rounded-full border border-slate-100" alt="profile" />
+                            <button onClick={() => setIsSettingsOpen(true)} className="w-full flex items-center justify-between p-3 hover:bg-slate-50 rounded-2xl transition-all group">
+                                <div className="flex items-center gap-3">
+                                    <img src={user.photoURL} className="w-8 h-8 rounded-full border border-slate-100" />
                                     <span className="text-xs font-bold text-slate-700 truncate">{user.displayName}</span>
                                 </div>
-                                <span className="text-[10px] font-black text-slate-300 group-hover:text-slate-900 italic tracking-widest transition-colors">SET</span>
+                                <span className="text-[10px] font-black text-slate-300 group-hover:text-slate-900 italic">SET</span>
                             </button>
                         </div>
                     </div>
 
-                    {/* Main Area */}
                     <div className="flex-1 flex flex-col bg-white">
                         {selectedMember ? (
                             <>
                                 <header className="h-24 px-10 flex items-center border-b border-slate-50">
                                     <div>
-                                        <h2 className="text-2xl font-black tracking-tighter">{selectedMember.name}</h2>
+                                        <h2 className="text-2xl font-black tracking-tighter text-slate-900">{selectedMember.name}</h2>
                                         <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{selectedMember.role || 'Member'}</p>
                                     </div>
                                 </header>
@@ -243,23 +214,22 @@
                                             value={feedbackInput} 
                                             onChange={e => setFeedbackInput(e.target.value)}
                                             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitFeedback(); } }}
-                                            placeholder={`${selectedMember.name}님에 대한 기록(Dot)을 남겨주세요...`}
-                                            className="w-full text-lg py-6 px-8 bg-slate-50 border-none rounded-[2.5rem] focus:ring-2 focus:ring-slate-900 outline-none shadow-inner font-medium resize-none overflow-hidden min-h-[80px]"
+                                            placeholder={`${selectedMember.name}님에게 남길 점(Dot)을 적으세요...`}
+                                            className="w-full text-lg py-6 px-8 bg-slate-50 border-none rounded-[2.5rem] focus:ring-2 focus:ring-slate-900 outline-none shadow-inner font-medium min-h-[80px]"
                                             autoFocus 
                                         />
                                     </div>
                                     <div className="space-y-4">
-                                        <div className="px-4 py-2 text-[10px] font-black text-slate-300 uppercase tracking-[0.4em] mb-4">Timeline</div>
                                         {snippets.map(s => (
                                             <div key={s.id} className="p-8 rounded-[3rem] border border-slate-50 bg-slate-50/20 hover:bg-slate-50 transition-all group relative">
                                                 {editingId === s.id ? (
-                                                    <div className="w-full space-y-4 text-right">
+                                                    <div className="w-full space-y-4">
                                                         <textarea 
                                                             ref={editAreaRef}
                                                             value={editInput}
                                                             onChange={e => setEditInput(e.target.value)}
                                                             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); updateSnippetContent(s.id); } }}
-                                                            className="w-full p-6 bg-white border-2 border-slate-900 rounded-[2rem] outline-none font-semibold shadow-xl resize-none overflow-hidden"
+                                                            className="w-full p-6 bg-white border-2 border-slate-900 rounded-[2rem] outline-none font-semibold shadow-xl"
                                                             autoFocus
                                                         />
                                                         <div className="flex gap-2 justify-end">
@@ -273,19 +243,14 @@
                                                         <div className="flex justify-between items-center mt-6">
                                                             <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{formatTimestamp(s.createdAt)}</span>
                                                             <div className="flex gap-4 opacity-0 group-hover:opacity-100 transition-all">
-                                                                <button onClick={() => { setEditingId(s.id); setEditInput(s.content); }} className="text-[10px] font-black text-slate-400 hover:text-slate-900 uppercase tracking-widest">Edit</button>
-                                                                <button onClick={() => deleteSnippet(s.id)} className="text-[10px] font-black text-red-200 hover:text-red-500 uppercase tracking-widest flex items-center gap-1">
-                                                                    <Icon.Trash /> Delete
-                                                                </button>
+                                                                <button onClick={() => { setEditingId(s.id); setEditInput(s.content); }} className="text-[10px] font-black text-slate-400 hover:text-slate-900 uppercase">Edit</button>
+                                                                <button onClick={() => { if(confirm("삭제하시겠습니까?")) deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'snippets', s.id)); }} className="text-[10px] font-black text-red-200 hover:text-red-500 uppercase flex items-center gap-1"><Icon.Trash /> Delete</button>
                                                             </div>
                                                         </div>
                                                     </>
                                                 )}
                                             </div>
                                         ))}
-                                        {snippets.length === 0 && (
-                                            <div className="py-20 text-center text-slate-200 font-bold uppercase tracking-widest text-[10px] tracking-[0.5em]">No records yet</div>
-                                        )}
                                     </div>
                                 </div>
                             </>
@@ -297,21 +262,20 @@
                         )}
                     </div>
 
-                    {/* Settings Modal */}
                     {isSettingsOpen && (
                         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-6 z-[100]">
-                            <div className="bg-white rounded-[3rem] w-full max-w-md shadow-2xl overflow-hidden border border-white/20 animate-modal">
-                                <div className="p-10 space-y-10 no-scrollbar overflow-y-auto max-h-[90vh]">
+                            <div className="bg-white rounded-[3rem] w-full max-w-md shadow-2xl overflow-hidden animate-modal">
+                                <div className="p-10 space-y-10 overflow-y-auto max-h-[90vh] no-scrollbar text-left">
                                     <div className="flex justify-between items-center">
-                                        <h3 className="text-2xl font-black italic tracking-tighter">Settings.</h3>
-                                        <button onClick={() => setIsSettingsOpen(false)} className="text-xs font-black text-slate-300 hover:text-slate-900 uppercase tracking-widest transition-colors">Close</button>
+                                        <h3 className="text-2xl font-black italic tracking-tighter text-slate-900">Settings.</h3>
+                                        <button onClick={() => setIsSettingsOpen(false)} className="text-xs font-black text-slate-300 hover:text-slate-900 uppercase tracking-widest">Close</button>
                                     </div>
                                     <div className="space-y-8">
                                         <div>
                                             <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-4">Account</p>
-                                            <div className="flex items-center justify-between p-5 bg-slate-50 rounded-3xl border border-slate-100">
-                                                <div className="flex items-center gap-3 overflow-hidden text-left">
-                                                    <img src={user.photoURL} className="w-10 h-10 rounded-full shadow-md" alt="profile" />
+                                            <div className="flex items-center justify-between p-5 bg-slate-50 rounded-3xl border border-slate-100 text-left">
+                                                <div className="flex items-center gap-3 overflow-hidden">
+                                                    <img src={user.photoURL} className="w-10 h-10 rounded-full shadow-md" />
                                                     <div className="overflow-hidden">
                                                         <p className="text-sm font-bold text-slate-900 truncate">{user.displayName}</p>
                                                         <p className="text-[10px] text-slate-400 font-medium truncate">{user.email}</p>
@@ -323,16 +287,16 @@
                                         <div>
                                             <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-4">Data Management</p>
                                             <button onClick={exportData} className="w-full flex justify-between items-center p-6 bg-slate-900 text-white rounded-3xl hover:bg-slate-800 transition-all shadow-xl active:scale-95">
-                                                <div className="text-left">
-                                                    <p className="text-sm font-bold text-white">내 기록 백업하기</p>
-                                                    <p className="text-[10px] text-white/50 font-medium uppercase tracking-tight">Export all dots as CSV</p>
+                                                <div className="text-left text-white">
+                                                    <p className="text-sm font-bold">내 기록 백업하기</p>
+                                                    <p className="text-[10px] opacity-50 font-medium uppercase">Export all as CSV</p>
                                                 </div>
                                                 <Icon.Download />
                                             </button>
                                         </div>
-                                        <div className="mt-4 text-left">
+                                        <div className="mt-4">
                                             <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-4">About Dot.</p>
-                                            <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100">
+                                            <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 text-left">
                                                 <p className="text-xs text-slate-600 leading-relaxed font-medium whitespace-pre-wrap">
                                                     평가/피드백 시즌만 되면, '그 사람한테 무슨 말을 써줄까' 고민하신 적이 있지 않으신가요?<br /><br />
                                                     기록되지 않은 성장은 잊혀지기 마련입니다.<br />
@@ -343,9 +307,9 @@
                                             </div>
                                         </div>
                                         <div>
-                                            <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-4">Support & Feedback</p>
-                                            <a href="mailto:chongtaeklee@gmail.com" className="block w-full p-5 border-2 border-dashed border-slate-100 rounded-3xl text-center hover:border-slate-300 transition-all group">
-                                                <span className="text-sm font-bold text-slate-400 group-hover:text-slate-600 transition-colors">개선 의견 보내기 ✉️</span>
+                                            <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-4 text-left">Support & Feedback</p>
+                                            <a href="mailto:chongtaeklee@gmail.com" className="block w-full p-5 border-2 border-dashed border-slate-100 rounded-3xl text-center hover:border-slate-300 transition-all">
+                                                <span className="text-sm font-bold text-slate-400">개선 의견 보내기 ✉️</span>
                                             </a>
                                         </div>
                                     </div>
@@ -357,17 +321,16 @@
                         </div>
                     )}
 
-                    {/* New Member Modal */}
                     {isAddingMember && (
                         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-6 z-[80]">
                             <div className="bg-white rounded-[3rem] w-full max-w-sm p-10 shadow-2xl border border-white/20 animate-modal text-left">
-                                <h3 className="text-2xl font-black mb-10 tracking-tight italic">New Team.</h3>
-                                <form onSubmit={addMember} className="space-y-4">
+                                <h3 className="text-2xl font-black mb-10 tracking-tight italic text-slate-900">New Team.</h3>
+                                <form onSubmit={addMember} className="space-y-4 text-left">
                                     <input required value={newMemberName} onChange={e => setNewMemberName(e.target.value)} placeholder="이름" className="w-full p-5 bg-slate-50 rounded-2xl outline-none font-bold placeholder:text-slate-200 focus:ring-2 focus:ring-slate-900 transition-all" />
                                     <input value={newMemberRole} onChange={e => setNewMemberRole(e.target.value)} placeholder="역할 (예: PM, Designer)" className="w-full p-5 bg-slate-50 rounded-2xl outline-none font-bold placeholder:text-slate-200 focus:ring-2 focus:ring-slate-900 transition-all" />
                                     <div className="flex gap-4 pt-8 text-center">
                                         <button type="button" onClick={() => setIsAddingMember(false)} className="flex-1 p-5 font-bold text-slate-400 hover:bg-slate-50 rounded-2xl transition-all">취소</button>
-                                        <button type="submit" className="flex-1 p-5 bg-slate-900 text-white font-bold rounded-2xl shadow-xl hover:bg-slate-800 active:scale-95 transition-all">추가하기</button>
+                                        <button type="submit" className="flex-1 p-5 bg-slate-900 text-white font-bold rounded-2xl shadow-xl hover:bg-slate-800 active:scale-95 transition-all text-center">추가하기</button>
                                     </div>
                                 </form>
                             </div>
