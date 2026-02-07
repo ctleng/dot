@@ -16,7 +16,6 @@
 <body class="bg-slate-50">
     <div id="root"></div>
 
-    <!-- type="text/babel"과 data-type="module"을 함께 사용하여 JSX와 Import 문을 모두 지원합니다. -->
     <script type="text/babel" data-type="module">
         const { useState, useEffect, useMemo } = React;
         
@@ -25,15 +24,15 @@
         import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
         // [중요] 이 부분을 본인의 Firebase 콘솔에서 복사한 설정값으로 교체하세요!
-          const firebaseConfig = {
-            apiKey: "AIzaSyB4Xhse62VG-wEsXSdsho0FDTea5nmDruI",
-            authDomain: "dot-connect-da773.firebaseapp.com",
-            projectId: "dot-connect-da773",
-            storageBucket: "dot-connect-da773.firebasestorage.app",
-            messagingSenderId: "24121008570",
-            appId: "1:24121008570:web:bb7305bb0b5e38a548fd83",
-            measurementId: "G-20Y2Z9R6LE"
-        };
+const firebaseConfig = {
+  apiKey: "AIzaSyB4Xhse62VG-wEsXSdsho0FDTea5nmDruI",
+  authDomain: "dot-connect-da773.firebaseapp.com",
+  projectId: "dot-connect-da773",
+  storageBucket: "dot-connect-da773.firebasestorage.app",
+  messagingSenderId: "24121008570",
+  appId: "1:24121008570:web:bb7305bb0b5e38a548fd83",
+  measurementId: "G-20Y2Z9R6LE"
+};
         
         const appId = 'dot-feedback-app';
         const app = initializeApp(firebaseConfig);
@@ -62,10 +61,16 @@
 
             useEffect(() => {
                 if (!user) return;
-                const membersRef = collection(db, 'artifacts', appId, 'users', user.uid, 'members');
-                return onSnapshot(membersRef, (snapshot) => {
-                    setMembers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-                });
+                try {
+                    const membersRef = collection(db, 'artifacts', appId, 'users', user.uid, 'members');
+                    return onSnapshot(membersRef, (snapshot) => {
+                        setMembers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                    }, (error) => {
+                        console.error("멤버 목록 불러오기 실패:", error);
+                    });
+                } catch (e) {
+                    console.error("Firestore 연결 에러:", e);
+                }
             }, [user]);
 
             useEffect(() => {
@@ -80,33 +85,44 @@
                         .filter(s => s.memberId === selectedMember.id)
                         .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
                     setSnippets(filtered);
+                }, (error) => {
+                    console.error("피드백 목록 불러오기 실패:", error);
                 });
             }, [user, selectedMember]);
 
-            const handleLogin = () => signInWithPopup(auth, googleProvider);
+            const handleLogin = () => signInWithPopup(auth, googleProvider).catch(e => console.error("로그인 에러:", e));
             const handleLogout = () => signOut(auth);
 
             const addMember = async (e) => {
                 e.preventDefault();
                 if (!newMemberName.trim()) return;
-                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'members'), {
-                    name: newMemberName,
-                    role: newMemberRole,
-                    createdAt: Date.now()
-                });
-                setNewMemberName(''); setNewMemberRole(''); setIsAddingMember(false);
+                try {
+                    await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'members'), {
+                        name: newMemberName,
+                        role: newMemberRole,
+                        createdAt: Date.now()
+                    });
+                    setNewMemberName(''); setNewMemberRole(''); setIsAddingMember(false);
+                } catch (error) {
+                    console.error("멤버 추가 중 에러 발생:", error);
+                    alert("멤버 추가에 실패했습니다. Firebase 콘솔의 Firestore 규칙을 확인해주세요.");
+                }
             };
 
             const submitFeedback = async (e) => {
                 e.preventDefault();
                 if (!feedbackInput.trim()) return;
-                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'snippets'), {
-                    memberId: selectedMember.id,
-                    content: feedbackInput,
-                    type: 'note',
-                    createdAt: Date.now()
-                });
-                setFeedbackInput('');
+                try {
+                    await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'snippets'), {
+                        memberId: selectedMember.id,
+                        content: feedbackInput,
+                        type: 'note',
+                        createdAt: Date.now()
+                    });
+                    setFeedbackInput('');
+                } catch (error) {
+                    console.error("피드백 저장 에러:", error);
+                }
             };
 
             if (authLoading) return <div className="h-screen flex items-center justify-center font-bold">Dot Loading...</div>;
