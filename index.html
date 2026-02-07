@@ -11,16 +11,13 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/lucide@0.400.0/dist/umd/lucide.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap');
         body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
-        
-        /* 텍스트 영역 부드러운 높이 조절 */
         textarea { transition: height 0.1s ease-in-out; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        
         @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
         .animate-modal { animation: fadeIn 0.2s ease-out; }
     </style>
@@ -35,7 +32,7 @@
         import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
-        // Firebase 설정 (사용자 정보 유지)
+        // Firebase 설정
         const firebaseConfig = {
             apiKey: "AIzaSyB4Xhse62VG-wEsXSdsho0FDTea5nmDruI",
             authDomain: "dot-connect-da773.firebaseapp.com",
@@ -71,11 +68,18 @@
             const textareaRef = useRef(null);
             const editAreaRef = useRef(null);
 
+            // 아이콘 렌더링 안전하게 실행
+            const refreshIcons = () => {
+                if (window.lucide) {
+                    window.lucide.createIcons();
+                }
+            };
+
             useEffect(() => {
                 const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
                     setUser(currentUser);
                     setAuthLoading(false);
-                    setTimeout(() => lucide.createIcons(), 200);
+                    setTimeout(refreshIcons, 100);
                 });
                 return () => unsubscribe();
             }, []);
@@ -85,6 +89,7 @@
                 const membersRef = collection(db, 'artifacts', appId, 'users', user.uid, 'members');
                 return onSnapshot(membersRef, (snapshot) => {
                     setMembers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                    setTimeout(refreshIcons, 100);
                 });
             }, [user]);
 
@@ -100,6 +105,7 @@
                         .filter(s => s.memberId === selectedMember.id)
                         .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
                     setSnippets(filtered);
+                    setTimeout(refreshIcons, 100);
                 });
             }, [user, selectedMember]);
 
@@ -116,18 +122,12 @@
             const handleLogin = () => {
                 signInWithPopup(auth, googleProvider).catch(error => {
                     if (error.code === 'auth/unauthorized-domain') {
-                        alert("이 주소는 Firebase 승인 목록에 없습니다. Firebase 콘솔의 Authentication > Settings > Authorized domains에 현재 접속 중인 주소를 추가해 주세요!");
-                    } else {
-                        console.error("Login Error:", error);
+                        alert("이 도메인은 승인되지 않았습니다. Firebase 콘솔에서 현재 주소를 '승인된 도메인'에 추가해주세요.");
                     }
                 });
             };
             
-            const handleLogout = () => {
-                if(confirm("로그아웃 하시겠습니까?")) {
-                    signOut(auth).then(() => setIsSettingsOpen(false));
-                }
-            };
+            const handleLogout = () => signOut(auth).then(() => setIsSettingsOpen(false));
 
             const addMember = async (e) => {
                 e.preventDefault();
@@ -162,11 +162,7 @@
                     const snippetsRef = collection(db, 'artifacts', appId, 'users', user.uid, 'snippets');
                     const snapshot = await getDocs(snippetsRef);
                     const allSnippets = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-                    if (allSnippets.length === 0) {
-                        alert("내보낼 기록이 없습니다.");
-                        return;
-                    }
+                    if (allSnippets.length === 0) { alert("내보낼 기록이 없습니다."); return; }
 
                     const rows = [["날짜", "팀원명", "역할", "피드백 내용"]];
                     allSnippets.forEach(s => {
@@ -183,13 +179,10 @@
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = `dot-feedback-export-${new Date().toISOString().split('T')[0]}.csv`;
+                    a.download = `dot-export-${new Date().toISOString().split('T')[0]}.csv`;
                     a.click();
                     URL.revokeObjectURL(url);
-                } catch (error) {
-                    console.error("Export Error:", error);
-                    alert("데이터를 가져오는 중 오류가 발생했습니다.");
-                }
+                } catch (error) { alert("다운로드 중 오류가 발생했습니다."); }
             };
 
             if (authLoading) return (
@@ -231,7 +224,7 @@
                         <div className="p-6 border-t border-slate-50">
                             <button onClick={() => setIsSettingsOpen(true)} className="w-full flex items-center justify-between p-3 hover:bg-slate-50 rounded-2xl transition-all group">
                                 <div className="flex items-center gap-3 overflow-hidden">
-                                    <img src={user.photoURL} className="w-8 h-8 rounded-full border border-slate-100 shadow-sm" alt="profile" />
+                                    <img src={user.photoURL} className="w-8 h-8 rounded-full border border-slate-100" alt="profile" />
                                     <span className="text-xs font-bold text-slate-700 truncate">{user.displayName}</span>
                                 </div>
                                 <span className="text-[10px] font-black text-slate-300 group-hover:text-slate-900 transition-colors italic tracking-widest">SET</span>
@@ -317,7 +310,7 @@
                         ) : (
                             <div className="flex-1 flex flex-col items-center justify-center text-slate-200">
                                 <div className="w-16 h-16 bg-slate-50 rounded-3xl flex items-center justify-center mb-6 text-slate-100 shadow-inner">
-                                    <i data-lucide="dot-circle" className="w-8 h-8"></i>
+                                    <i data-lucide="dot" className="w-8 h-8"></i>
                                 </div>
                                 <span className="text-[10px] font-black uppercase tracking-[0.5em]">Select Member</span>
                             </div>
@@ -334,7 +327,6 @@
                                         <button onClick={() => setIsSettingsOpen(false)} className="text-xs font-black text-slate-300 hover:text-slate-900 transition-colors uppercase tracking-widest">Close</button>
                                     </div>
                                     <div className="space-y-8">
-                                        {/* Account Info */}
                                         <div>
                                             <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-4">Account</p>
                                             <div className="flex items-center justify-between p-5 bg-slate-50 rounded-3xl border border-slate-100">
@@ -348,7 +340,6 @@
                                                 <button onClick={handleLogout} className="text-[10px] font-black text-red-500 hover:bg-red-50 px-3 py-2 rounded-xl transition-all uppercase tracking-tighter">Logout</button>
                                             </div>
                                         </div>
-                                        {/* Data Management */}
                                         <div>
                                             <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-4">Data Management</p>
                                             <button onClick={exportData} className="w-full flex justify-between items-center p-6 bg-slate-900 text-white rounded-3xl hover:bg-slate-800 transition-all shadow-xl active:scale-95">
@@ -359,24 +350,20 @@
                                                 <i data-lucide="download" className="w-5 h-5 opacity-50"></i>
                                             </button>
                                         </div>
-                                        {/* About Dot Section */}
                                         <div className="mt-4">
                                             <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-4">About Dot.</p>
                                             <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100 text-left">
                                                 <p className="text-sm text-slate-600 leading-relaxed font-medium whitespace-pre-line">
-                                                    평가/피드백 시즌만 되면, '그 사람한테 무슨 말을 써줄까' 고민하신 적이 있지 않으신가요?
-                                                    뒤늦게 몰아서 방학 일기 쓰듯 작성된 피드백은 임팩트가 없습니다.
-                                                    기록되지 않은 성장은 잊혀지기 마련입니다.
-                                                    찰나의 피드백들을 점(Dot)으로 찍어두면, 나중에 그것들이 연결되어 거대한 성장의 선이 될 거라 믿습니다.
-
-                                                    지인분들의 소중한 기록을 응원하며 만들었습니다.
-
-                                                    1. 본 서비스는 '피드백의 적시 기록/기억'을 위해 만들었습니다.
+                                                    평가/피드백 시즌만 되면, '그 사람한테 무슨 말을 써줄까' 고민하신 적이 있지 않으신가요?<br />
+                                                    뒤늦게 몰아서 방학 일기 쓰듯 작성된 피드백은 임팩트가 없습니다.<br />
+                                                    기록되지 않은 성장은 잊혀지기 마련입니다.<br />
+                                                    찰나의 피드백들을 점(Dot)으로 찍어두면, 나중에 그것들이 연결되어 거대한 성장의 선이 될 거라 믿습니다. <br /><br />
+                                                    지인분들의 소중한 기록을 응원하며 만들었습니다. <br /><br />
+                                                    1. 본 서비스는 '피드백의 적시 기록/기억'을 위해 만들었습니다.<br />
                                                     2. 여기 입력된 데이터는 대상자에게 전송되지 않으며, 작성자 본인만 조회 가능합니다.
                                                 </p>
                                             </div>
                                         </div>
-                                        {/* Support Section */}
                                         <div>
                                             <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-4">Support & Feedback</p>
                                             <a href="mailto:chongtaeklee@gmail.com" className="block w-full p-5 border-2 border-dashed border-slate-100 rounded-3xl text-center hover:border-slate-300 transition-all group">
@@ -397,7 +384,7 @@
                         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-6 z-[80]">
                             <div className="bg-white rounded-[3rem] w-full max-w-sm p-10 shadow-2xl border border-white/20 animate-modal text-left">
                                 <h3 className="text-2xl font-black mb-10 tracking-tight italic">New Team.</h3>
-                                <form onSubmit={addMember} className="space-y-4 text-left">
+                                <form onSubmit={addMember} className="space-y-4">
                                     <input required value={newMemberName} onChange={e => setNewMemberName(e.target.value)} placeholder="이름" className="w-full p-5 bg-slate-50 rounded-2xl outline-none font-bold placeholder:text-slate-200 focus:ring-2 focus:ring-slate-900 transition-all" />
                                     <input value={newMemberRole} onChange={e => setNewMemberRole(e.target.value)} placeholder="역할 (예: PM, Designer)" className="w-full p-5 bg-slate-50 rounded-2xl outline-none font-bold placeholder:text-slate-200 focus:ring-2 focus:ring-slate-900 transition-all" />
                                     <div className="flex gap-4 pt-8">
