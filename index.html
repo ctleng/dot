@@ -17,7 +17,7 @@
     <div id="root"></div>
 
     <script type="text/babel" data-type="module">
-        const { useState, useEffect, useMemo } = React;
+        const { useState, useEffect, useMemo, useRef } = React;
         
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
@@ -53,6 +53,8 @@ const firebaseConfig = {
             // 수정 기능을 위한 상태들
             const [editingId, setEditingId] = useState(null);
             const [editInput, setEditInput] = useState('');
+            const textareaRef = useRef(null); // 메인 입력창용
+            const editAreaRef = useRef(null); // 수정 입력창용
 
             
             useEffect(() => {
@@ -146,6 +148,17 @@ const firebaseConfig = {
                     await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'snippets', id));
                 } catch (error) { console.error("Delete Error:", error); }
             };
+            // 입력창 높이 자동 조절 함수
+            const autoResize = (ref) => {
+                if (ref.current) {
+                    ref.current.style.height = 'auto';
+                    ref.current.style.height = ref.current.scrollHeight + 'px';
+                }
+            };
+
+            // 글을 쓸 때마다 높이 조절 실행
+            useEffect(() => { autoResize(textareaRef); }, [feedbackInput]);
+            useEffect(() => { autoResize(editAreaRef); }, [editInput, editingId]);
 
             
             if (authLoading) return <div className="h-screen flex items-center justify-center font-bold">Dot Loading...</div>;
@@ -192,13 +205,23 @@ const firebaseConfig = {
                                 </header>
                                 <div className="flex-1 overflow-y-auto px-10 py-10 max-w-4xl w-full mx-auto">
                                     <form onSubmit={submitFeedback} className="mb-12">
-                                        <input 
+                                        <div className="mb-12">
+                                        <textarea 
+                                            ref={textareaRef}
                                             value={feedbackInput} 
                                             onChange={e => setFeedbackInput(e.target.value)}
-                                            placeholder={`${selectedMember.name}님에 대해 생각난 점을 적고 엔터...`}
-                                            className="w-full text-lg py-6 px-8 bg-slate-50 border-none rounded-[2rem] focus:ring-2 focus:ring-slate-900 outline-none shadow-inner font-medium"
+                                            onKeyDown={e => {
+                                                // 엔터만 누르면 저장, Shift+엔터는 줄바꿈
+                                                if (e.key === 'Enter' && !e.shiftKey) {
+                                                    e.preventDefault();
+                                                    submitFeedback();
+                                                }
+                                            }}
+                                            placeholder={`${selectedMember.name}님에 대해 생각난 점을 적으세요... (Shift+Enter로 줄바꿈)`}
+                                            className="w-full text-lg py-6 px-8 bg-slate-50 border-none rounded-[2rem] focus:ring-2 focus:ring-slate-900 outline-none shadow-inner font-medium resize-none overflow-hidden min-h-[80px]"
                                             autoFocus 
                                         />
+                                    </div>
                                     </form>
                                     <div className="space-y-4">
                                         <div className="flex items-center gap-2 text-slate-300 mb-6">
@@ -208,10 +231,18 @@ const firebaseConfig = {
                                             <div key={s.id} className="p-6 rounded-[2rem] border border-slate-50 bg-slate-50/20 hover:bg-slate-50 transition-all group relative">
                                                 {editingId === s.id ? (
                                                     <div className="w-full space-y-3">
-                                                        <input 
+                                                        <textarea 
+                                                            ref={editAreaRef}
                                                             value={editInput}
                                                             onChange={e => setEditInput(e.target.value)}
-                                                            className="w-full p-4 bg-white border-2 border-slate-900 rounded-2xl outline-none font-semibold shadow-lg"
+                                                            onKeyDown={e => {
+                                                                // 수정 중 엔터만 누르면 바로 저장
+                                                                if (e.key === 'Enter' && !e.shiftKey) {
+                                                                    e.preventDefault();
+                                                                    updateSnippetContent(s.id);
+                                                                }
+                                                            }}
+                                                            className="w-full p-4 bg-white border-2 border-slate-900 rounded-2xl outline-none font-semibold shadow-lg resize-none overflow-hidden min-h-[60px]"
                                                             autoFocus
                                                         />
                                                         <div className="flex gap-2 justify-end">
