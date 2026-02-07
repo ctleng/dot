@@ -4,17 +4,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dot. - Team Feedback</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & Libraries -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap');
         body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
+        
+        /* 텍스트 영역 부드러운 높이 조절 */
         textarea { transition: height 0.1s ease-in-out; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
         @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
         .animate-modal { animation: fadeIn 0.2s ease-out; }
     </style>
@@ -29,6 +35,7 @@
         import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
+        // Firebase 설정 (사용자 정보 유지)
         const firebaseConfig = {
             apiKey: "AIzaSyB4Xhse62VG-wEsXSdsho0FDTea5nmDruI",
             authDomain: "dot-connect-da773.firebaseapp.com",
@@ -51,13 +58,16 @@
             const [members, setMembers] = useState([]);
             const [selectedMember, setSelectedMember] = useState(null);
             const [snippets, setSnippets] = useState([]);
+            
             const [isAddingMember, setIsAddingMember] = useState(false);
             const [isSettingsOpen, setIsSettingsOpen] = useState(false);
             const [editingId, setEditingId] = useState(null);
+            
             const [newMemberName, setNewMemberName] = useState('');
             const [newMemberRole, setNewMemberRole] = useState('');
             const [feedbackInput, setFeedbackInput] = useState('');
             const [editInput, setEditInput] = useState('');
+
             const textareaRef = useRef(null);
             const editAreaRef = useRef(null);
 
@@ -103,8 +113,21 @@
             useEffect(() => autoResize(textareaRef), [feedbackInput]);
             useEffect(() => autoResize(editAreaRef), [editInput, editingId]);
 
-            const handleLogin = () => signInWithPopup(auth, googleProvider);
-            const handleLogout = () => signOut(auth).then(() => setIsSettingsOpen(false));
+            const handleLogin = () => {
+                signInWithPopup(auth, googleProvider).catch(error => {
+                    if (error.code === 'auth/unauthorized-domain') {
+                        alert("이 주소는 Firebase 승인 목록에 없습니다. Firebase 콘솔의 Authentication > Settings > Authorized domains에 현재 접속 중인 주소를 추가해 주세요!");
+                    } else {
+                        console.error("Login Error:", error);
+                    }
+                });
+            };
+            
+            const handleLogout = () => {
+                if(confirm("로그아웃 하시겠습니까?")) {
+                    signOut(auth).then(() => setIsSettingsOpen(false));
+                }
+            };
 
             const addMember = async (e) => {
                 e.preventDefault();
@@ -169,13 +192,17 @@
                 }
             };
 
-            if (authLoading) return <div className="h-screen flex items-center justify-center bg-white text-slate-300 font-black tracking-widest text-xs uppercase animate-pulse">Connecting...</div>;
+            if (authLoading) return (
+                <div className="h-screen flex items-center justify-center bg-white text-slate-300 font-black tracking-widest text-xs uppercase animate-pulse">
+                    Connecting to Dots...
+                </div>
+            );
 
             if (!user) return (
                 <div className="h-screen flex items-center justify-center bg-slate-50 p-6">
                     <div className="bg-white p-12 rounded-[3.5rem] shadow-2xl max-w-sm w-full text-center border border-slate-100">
                         <div className="w-20 h-20 bg-slate-900 text-white rounded-[2.2rem] flex items-center justify-center mx-auto mb-8 shadow-xl">
-                            <div className="w-10 h-10 bg-white rounded-full"></div>
+                            <i data-lucide="dot" className="w-12 h-12"></i>
                         </div>
                         <h1 className="text-3xl font-black mb-2 italic tracking-tighter">Dot.</h1>
                         <p className="text-slate-400 mb-12 text-sm font-medium">성장을 위한 기록의 시작.</p>
@@ -200,10 +227,11 @@
                                 </button>
                             ))}
                         </div>
+                        
                         <div className="p-6 border-t border-slate-50">
                             <button onClick={() => setIsSettingsOpen(true)} className="w-full flex items-center justify-between p-3 hover:bg-slate-50 rounded-2xl transition-all group">
                                 <div className="flex items-center gap-3 overflow-hidden">
-                                    <img src={user.photoURL} className="w-8 h-8 rounded-full border border-slate-100" />
+                                    <img src={user.photoURL} className="w-8 h-8 rounded-full border border-slate-100 shadow-sm" alt="profile" />
                                     <span className="text-xs font-bold text-slate-700 truncate">{user.displayName}</span>
                                 </div>
                                 <span className="text-[10px] font-black text-slate-300 group-hover:text-slate-900 transition-colors italic tracking-widest">SET</span>
@@ -268,7 +296,9 @@
                                                     <>
                                                         <p className="text-slate-800 text-lg font-semibold leading-relaxed pr-10 whitespace-pre-wrap">{s.content}</p>
                                                         <div className="flex justify-between items-center mt-6">
-                                                            <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{new Date(s.createdAt).toLocaleDateString()}</span>
+                                                            <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
+                                                                {new Date(s.createdAt).toLocaleDateString()}
+                                                            </span>
                                                             <div className="flex gap-4 opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0">
                                                                 <button onClick={() => { setEditingId(s.id); setEditInput(s.content); }} className="text-[10px] font-black text-slate-400 hover:text-slate-900 uppercase tracking-widest">Edit</button>
                                                                 <button onClick={() => deleteSnippet(s.id)} className="text-[10px] font-black text-red-200 hover:text-red-500 uppercase tracking-widest">Delete</button>
@@ -278,13 +308,16 @@
                                                 )}
                                             </div>
                                         ))}
+                                        {snippets.length === 0 && (
+                                            <div className="py-20 text-center text-slate-200 font-bold uppercase tracking-widest text-xs tracking-[0.5em]">No dots yet</div>
+                                        )}
                                     </div>
                                 </div>
                             </>
                         ) : (
                             <div className="flex-1 flex flex-col items-center justify-center text-slate-200">
                                 <div className="w-16 h-16 bg-slate-50 rounded-3xl flex items-center justify-center mb-6 text-slate-100 shadow-inner">
-                                    <div className="w-4 h-4 bg-slate-200 rounded-full animate-pulse"></div>
+                                    <i data-lucide="dot-circle" className="w-8 h-8"></i>
                                 </div>
                                 <span className="text-[10px] font-black uppercase tracking-[0.5em]">Select Member</span>
                             </div>
@@ -301,12 +334,12 @@
                                         <button onClick={() => setIsSettingsOpen(false)} className="text-xs font-black text-slate-300 hover:text-slate-900 transition-colors uppercase tracking-widest">Close</button>
                                     </div>
                                     <div className="space-y-8">
-                                        {/* Account */}
+                                        {/* Account Info */}
                                         <div>
                                             <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-4">Account</p>
                                             <div className="flex items-center justify-between p-5 bg-slate-50 rounded-3xl border border-slate-100">
                                                 <div className="flex items-center gap-3 overflow-hidden text-left">
-                                                    <img src={user.photoURL} className="w-10 h-10 rounded-full shadow-md" />
+                                                    <img src={user.photoURL} className="w-10 h-10 rounded-full shadow-md" alt="profile" />
                                                     <div className="overflow-hidden">
                                                         <p className="text-sm font-bold text-slate-900 truncate">{user.displayName}</p>
                                                         <p className="text-[10px] text-slate-400 font-medium truncate">{user.email}</p>
@@ -321,12 +354,12 @@
                                             <button onClick={exportData} className="w-full flex justify-between items-center p-6 bg-slate-900 text-white rounded-3xl hover:bg-slate-800 transition-all shadow-xl active:scale-95">
                                                 <div className="text-left">
                                                     <p className="text-sm font-bold">내 기록 백업하기</p>
-                                                    <p className="text-[10px] opacity-50 font-medium uppercase tracking-tight">Export all as CSV</p>
+                                                    <p className="text-[10px] opacity-50 font-medium uppercase tracking-tight">Export all dots as CSV</p>
                                                 </div>
-                                                <span className="text-xs font-black">EXPORT ↓</span>
+                                                <i data-lucide="download" className="w-5 h-5 opacity-50"></i>
                                             </button>
                                         </div>
-                                        {/* About Dot. */}
+                                        {/* About Dot Section */}
                                         <div className="mt-4">
                                             <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-4">About Dot.</p>
                                             <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100 text-left">
@@ -343,7 +376,7 @@
                                                 </p>
                                             </div>
                                         </div>
-                                        {/* Support */}
+                                        {/* Support Section */}
                                         <div>
                                             <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-4">Support & Feedback</p>
                                             <a href="mailto:chongtaeklee@gmail.com" className="block w-full p-5 border-2 border-dashed border-slate-100 rounded-3xl text-center hover:border-slate-300 transition-all group">
@@ -362,14 +395,14 @@
                     {/* Modal: New Member */}
                     {isAddingMember && (
                         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-6 z-[80]">
-                            <div className="bg-white rounded-[3rem] w-full max-w-sm p-10 shadow-2xl border border-white/20 animate-modal">
-                                <h3 className="text-2xl font-black mb-10 tracking-tight italic text-left">New Team.</h3>
-                                <form onSubmit={addMember} className="space-y-4">
+                            <div className="bg-white rounded-[3rem] w-full max-w-sm p-10 shadow-2xl border border-white/20 animate-modal text-left">
+                                <h3 className="text-2xl font-black mb-10 tracking-tight italic">New Team.</h3>
+                                <form onSubmit={addMember} className="space-y-4 text-left">
                                     <input required value={newMemberName} onChange={e => setNewMemberName(e.target.value)} placeholder="이름" className="w-full p-5 bg-slate-50 rounded-2xl outline-none font-bold placeholder:text-slate-200 focus:ring-2 focus:ring-slate-900 transition-all" />
                                     <input value={newMemberRole} onChange={e => setNewMemberRole(e.target.value)} placeholder="역할 (예: PM, Designer)" className="w-full p-5 bg-slate-50 rounded-2xl outline-none font-bold placeholder:text-slate-200 focus:ring-2 focus:ring-slate-900 transition-all" />
                                     <div className="flex gap-4 pt-8">
-                                        <button type="button" onClick={() => setIsAddingMember(false)} className="flex-1 p-5 font-bold text-slate-400 hover:bg-slate-50 rounded-2xl transition-all text-center">취소</button>
-                                        <button type="submit" className="flex-1 p-5 bg-slate-900 text-white font-bold rounded-2xl shadow-xl hover:bg-slate-800 active:scale-95 transition-all text-center">추가하기</button>
+                                        <button type="button" onClick={() => setIsAddingMember(false)} className="flex-1 p-5 font-bold text-slate-400 hover:bg-slate-50 rounded-2xl transition-all">취소</button>
+                                        <button type="submit" className="flex-1 p-5 bg-slate-900 text-white font-bold rounded-2xl shadow-xl hover:bg-slate-800 active:scale-95 transition-all">추가하기</button>
                                     </div>
                                 </form>
                             </div>
