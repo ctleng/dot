@@ -15,6 +15,8 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         @keyframes fadeIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
         .animate-modal { animation: fadeIn 0.2s ease-out; }
+        /* 4줄 제한을 위한 커스텀 클래스 */
+        .line-clamp-4 { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
     </style>
 </head>
 <body>
@@ -48,7 +50,8 @@
             Plus: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
             Download: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
             Trash: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
-            Menu: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            Menu: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>,
+            ChevronDown: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
         };
 
         function App() {
@@ -57,6 +60,7 @@
             const [members, setMembers] = useState([]);
             const [selectedMember, setSelectedMember] = useState(null);
             const [snippets, setSnippets] = useState([]);
+            const [expandedId, setExpandedId] = useState(null); // 어떤 피드백이 펼쳐져 있는지 기억
             const [isAddingMember, setIsAddingMember] = useState(false);
             const [isSettingsOpen, setIsSettingsOpen] = useState(false);
             const [editingId, setEditingId] = useState(null);
@@ -138,11 +142,9 @@
                 } catch (e) { alert("수정 실패"); }
             };
 
-            const handleDeleteSnippet = async (id) => {
-                if (!confirm("정말 삭제하시겠습니까?")) return;
-                try {
-                    await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'snippets', id));
-                } catch (e) { alert("삭제 실패"); }
+            const toggleExpand = (id) => {
+                // 이미 열려있으면 닫고, 아니면 연다 (Smart Auto-Collapse)
+                setExpandedId(prev => prev === id ? null : id);
             };
 
             const formatTimestamp = (ts) => {
@@ -164,7 +166,7 @@
                     const csv = "\uFEFF" + rows.map(r => r.join(",")).join("\n");
                     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
                     const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a'); a.href = url; a.download = `dot-backup.csv`; a.click();
+                    const a = document.createElement('a'); a.href = url; a.download = `dot-export.csv`; a.click();
                 } catch (e) { alert("백업 실패"); }
             };
 
@@ -185,18 +187,16 @@
 
             return (
                 <div className="flex h-screen overflow-hidden relative">
-                    {/* Sidebar: Mobile conditional visibility */}
+                    {/* Sidebar */}
                     <div className={`${selectedMember ? 'hidden md:flex' : 'flex'} w-full md:w-72 border-r border-slate-100 flex-col bg-white transition-all`}>
-                        <div className="p-8">
-                            <h1 className="font-black text-2xl tracking-tighter italic text-slate-900">Dot.</h1>
-                        </div>
+                        <div className="p-8"><h1 className="font-black text-2xl tracking-tighter italic text-slate-900">Dot.</h1></div>
                         <div className="flex-1 overflow-y-auto p-4 space-y-2 no-scrollbar">
                             <button onClick={() => setIsAddingMember(true)} className="w-full flex items-center justify-center gap-2 p-4 text-xs font-black text-slate-400 border-2 border-dashed border-slate-50 rounded-2xl hover:border-slate-200 hover:text-slate-600 transition-all mb-4">
                                 <Icon.Plus /> NEW MEMBER
                             </button>
                             {members.map(m => (
-                                <button key={m.id} onClick={() => setSelectedMember(m)} className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all ${selectedMember?.id === m.id ? 'bg-slate-900 text-white shadow-xl' : 'hover:bg-slate-50 text-slate-600'}`}>
-                                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-[10px] ${selectedMember?.id === m.id ? 'bg-slate-700' : 'bg-slate-100 text-slate-400'}`}>{m.name[0]}</div>
+                                <button key={m.id} onClick={() => { setSelectedMember(m); setExpandedId(null); }} className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all ${selectedMember?.id === m.id ? 'bg-slate-900 text-white shadow-xl' : 'hover:bg-slate-50 text-slate-600'}`}>
+                                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs ${selectedMember?.id === m.id ? 'bg-slate-700' : 'bg-slate-100 text-slate-400'}`}>{m.name[0]}</div>
                                     <span className="font-bold text-sm truncate">{m.name}</span>
                                 </button>
                             ))}
@@ -204,7 +204,7 @@
                         <div className="p-6 border-t border-slate-50">
                             <button onClick={() => setIsSettingsOpen(true)} className="w-full flex items-center justify-between p-3 hover:bg-slate-50 rounded-2xl transition-all group text-left">
                                 <div className="flex items-center gap-3 overflow-hidden">
-                                    <img src={user.photoURL} className="w-8 h-8 rounded-full border border-slate-100 shadow-sm" alt="profile" />
+                                    <img src={user.photoURL} className="w-8 h-8 rounded-full border border-slate-100" alt="profile" />
                                     <span className="text-xs font-bold text-slate-700 truncate">{user.displayName}</span>
                                 </div>
                                 <span className="text-[10px] font-black text-slate-300 group-hover:text-slate-900 italic tracking-widest transition-colors">SET</span>
@@ -212,16 +212,13 @@
                         </div>
                     </div>
 
-                    {/* Main Content Area: Mobile conditional visibility */}
+                    {/* Main Content Area */}
                     <div className={`${selectedMember ? 'flex' : 'hidden md:flex'} flex-1 flex-col bg-white transition-all`}>
                         {selectedMember ? (
                             <>
                                 <header className="h-20 md:h-24 px-6 md:px-10 flex items-center border-b border-slate-50 bg-white sticky top-0 z-10">
                                     <div className="flex items-center gap-4 w-full">
-                                        {/* Hamburger Menu Icon (Mobile Only) */}
-                                        <button onClick={() => setSelectedMember(null)} className="md:hidden p-2 -ml-2 text-slate-400 hover:text-slate-900 transition-colors">
-                                            <Icon.Menu />
-                                        </button>
+                                        <button onClick={() => setSelectedMember(null)} className="md:hidden p-2 -ml-2 text-slate-400 hover:text-slate-900 transition-colors"><Icon.Menu /></button>
                                         <div className="overflow-hidden">
                                             <h2 className="text-xl md:text-2xl font-black tracking-tighter text-slate-900 truncate">{selectedMember.name}</h2>
                                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{selectedMember.role || 'Member'}</p>
@@ -249,7 +246,7 @@
                                     <div className="space-y-4">
                                         <div className="px-2 text-[10px] font-black text-slate-200 uppercase tracking-[0.4em] mb-4">Timeline</div>
                                         {snippets.map(s => (
-                                            <div key={s.id} className="p-6 md:p-8 rounded-3xl md:rounded-[3rem] border border-slate-50 bg-slate-50/20 hover:bg-slate-50 transition-all group relative">
+                                            <div key={s.id} className="p-6 md:p-8 rounded-3xl md:rounded-[3rem] border border-slate-50 bg-slate-50/20 hover:bg-slate-50 transition-all group relative overflow-hidden">
                                                 {editingId === s.id ? (
                                                     <div className="w-full space-y-4">
                                                         <textarea 
@@ -272,16 +269,27 @@
                                                         </div>
                                                     </div>
                                                 ) : (
-                                                    <>
-                                                        <p className="text-slate-800 text-base md:text-lg font-semibold leading-relaxed pr-6 md:pr-10 whitespace-pre-wrap">{s.content}</p>
+                                                    <div onClick={() => toggleExpand(s.id)} className="cursor-pointer relative">
+                                                        {/* 스마트 토글 적용된 본문 */}
+                                                        <p className={`text-slate-800 text-base md:text-lg font-semibold leading-relaxed pr-6 md:pr-10 whitespace-pre-wrap transition-all duration-300 ${expandedId === s.id ? '' : 'line-clamp-4'}`}>
+                                                            {s.content}
+                                                        </p>
+                                                        
+                                                        {/* 축소 상태일 때만 보이는 그라데이션 및 더보기 안내 */}
+                                                        {expandedId !== s.id && s.content.split('\n').length > 4 && (
+                                                            <div className="absolute bottom-0 left-0 w-full h-8 bg-gradient-to-t from-white/80 to-transparent flex items-end justify-center">
+                                                                <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-1 flex items-center gap-1">Read More <Icon.ChevronDown /></span>
+                                                            </div>
+                                                        )}
+
                                                         <div className="flex justify-between items-center mt-4 md:mt-6">
                                                             <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{formatTimestamp(s.createdAt)}</span>
                                                             <div className="flex gap-3 md:gap-4 md:opacity-0 group-hover:opacity-100 transition-all">
-                                                                <button onClick={() => { setEditingId(s.id); setEditInput(s.content); }} className="text-[10px] font-black text-slate-400 hover:text-slate-900 uppercase">Edit</button>
-                                                                <button onClick={() => handleDeleteSnippet(s.id)} className="text-[10px] font-black text-red-200 hover:text-red-500 uppercase flex items-center gap-1"><Icon.Trash /> Delete</button>
+                                                                <button onClick={(e) => { e.stopPropagation(); setEditingId(s.id); setEditInput(s.content); }} className="text-[10px] font-black text-slate-400 hover:text-slate-900 uppercase">Edit</button>
+                                                                <button onClick={(e) => { e.stopPropagation(); if(confirm("삭제하시겠습니까?")) deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'snippets', s.id)); }} className="text-[10px] font-black text-red-200 hover:text-red-500 uppercase flex items-center gap-1"><Icon.Trash /> Delete</button>
                                                             </div>
                                                         </div>
-                                                    </>
+                                                    </div>
                                                 )}
                                             </div>
                                         ))}
@@ -293,9 +301,7 @@
                             </>
                         ) : (
                             <div className="flex-1 flex flex-col items-center justify-center text-slate-200 text-center p-10">
-                                <div className="w-16 h-16 bg-slate-50 rounded-3xl flex items-center justify-center mb-6 shadow-inner text-slate-300">
-                                    <Icon.Dot />
-                                </div>
+                                <div className="w-16 h-16 bg-slate-50 rounded-3xl flex items-center justify-center mb-6 shadow-inner text-slate-300"><Icon.Dot /></div>
                                 <span className="text-[10px] font-black uppercase tracking-[0.5em]">Select Member to begin</span>
                             </div>
                         )}
@@ -312,7 +318,7 @@
                                     </div>
                                     <div className="space-y-6 md:space-y-8">
                                         <div>
-                                            <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-4 text-left">Account</p>
+                                            <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-4 text-left text-slate-300">Account</p>
                                             <div className="flex items-center justify-between p-4 md:p-5 bg-slate-50 rounded-[1.5rem] md:rounded-3xl border border-slate-100 text-left">
                                                 <div className="flex items-center gap-3 overflow-hidden">
                                                     <img src={user.photoURL} className="w-8 h-8 md:w-10 md:h-10 rounded-full shadow-md" alt="profile" />
@@ -325,32 +331,26 @@
                                             </div>
                                         </div>
                                         <div>
-                                            <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-4 text-left">Data Management</p>
+                                            <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-4 text-left text-slate-300">Data Management</p>
                                             <button onClick={exportData} className="w-full flex justify-between items-center p-5 md:p-6 bg-slate-900 text-white rounded-[1.5rem] md:rounded-3xl hover:bg-slate-800 transition-all shadow-xl active:scale-95">
                                                 <div className="text-left text-white">
                                                     <p className="text-sm font-bold">내 기록 백업하기</p>
-                                                    <p className="text-[10px] opacity-50 font-medium uppercase">Export all as CSV</p>
+                                                    <p className="text-[10px] opacity-50 font-medium uppercase tracking-tight">Export all as CSV</p>
                                                 </div>
                                                 <Icon.Download />
                                             </button>
                                         </div>
                                         <div>
-                                            <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-4 text-left">About Dot.</p>
-                                            <div className="p-5 md:p-6 bg-slate-50 rounded-[1.5rem] md:rounded-3xl border border-slate-100 text-left">
+                                            <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-4 text-left text-slate-300">About Dot.</p>
+                                            <div className="p-5 md:p-6 bg-slate-50 rounded-[1.5rem] md:rounded-3xl border border-slate-100 text-left text-slate-300">
                                                 <p className="text-[11px] md:text-xs text-slate-600 leading-relaxed font-medium whitespace-pre-wrap">
                                                     {`기록되지 않은 성장은 잊혀지기 마련입니다.\n찰나의 피드백들을 점(Dot)으로 찍어두면, 나중에 그것들이 연결되어 거대한 성장의 선이 될 거라 믿습니다.\n\n1. 본 서비스는 '피드백의 적시 기록'을 위해 만들었습니다.\n2. 여기 입력된 데이터는 작성자 본인만 조회 가능합니다.`}
                                                 </p>
                                             </div>
                                         </div>
-                                        <div>
-                                            <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-4 text-left">Support & Feedback</p>
-                                            <a href="mailto:chongtaeklee@gmail.com" className="block w-full p-4 md:p-5 border-2 border-dashed border-slate-100 rounded-[1.5rem] md:rounded-3xl text-center hover:border-slate-300 transition-all">
-                                                <span className="text-sm font-bold text-slate-400">개선 의견 보내기 ✉️</span>
-                                            </a>
-                                        </div>
                                     </div>
                                     <div className="pt-4 text-center">
-                                        <p className="text-[10px] font-black text-slate-200 uppercase tracking-[0.4em]">v1.0.0 Build 2024</p>
+                                        <p className="text-[10px] font-black text-slate-200 uppercase tracking-[0.4em]">v1.0.1 Build 2024</p>
                                     </div>
                                 </div>
                             </div>
